@@ -1,14 +1,13 @@
 #include <stdio.h>
 #include <iostream>
 #include <engram_bin.hpp>
-using namespace engram;
 
 struct Base {
   std::string type = "base";
   virtual const char* type_id() const { return "Base"; }
   virtual std::ostream& print(std::ostream& os) const { return os << "Base(type=" << type << ")"; }
-  friend BinaryEngram& operator<<(BinaryEngram& engram, const Base& self) { return engram << self.type; }
-  friend BinaryEngram& operator>>(BinaryEngram& engram, Base& self) { return engram >> self.type; }
+  friend engram::BinaryEngram& operator<<(engram::BinaryEngram& engram, const Base& self) { return engram << self.type; }
+  friend engram::BinaryEngram& operator>>(engram::BinaryEngram& engram, Base& self) { return engram >> self.type; }
   friend std::ostream& operator<<(std::ostream& os, const Base& self) { return self.print(os); }
 };
 ENGRAM_REGISTER_TYPE(Base, "Base");
@@ -23,8 +22,8 @@ struct Derived : public Base {
       os << c;
     return os << ")";
   }
-  friend BinaryEngram& operator<<(BinaryEngram& engram, const Derived& self) { return engram << (const Base&)self << self.payload; }
-  friend BinaryEngram& operator>>(BinaryEngram& engram, Derived& self) { return engram >> (Base&)self >> self.payload; }
+  friend engram::BinaryEngram& operator<<(engram::BinaryEngram& engram, const Derived& self) { return engram << (const Base&)self << self.payload; }
+  friend engram::BinaryEngram& operator>>(engram::BinaryEngram& engram, Derived& self) { return engram >> (Base&)self >> self.payload; }
   friend std::ostream& operator<<(std::ostream& os, const Derived& self) { return self.print(os); }
 };
 ENGRAM_REGISTER_TYPE(Derived, "Derived");
@@ -38,10 +37,10 @@ struct Foo {
   std::vector<int> f = { 7, 8, 9 };
 
  public:
-  friend BinaryEngram& operator<<(BinaryEngram& engram, const Foo& self) {
+  friend engram::BinaryEngram& operator<<(engram::BinaryEngram& engram, const Foo& self) {
     return engram << self.a << self.b << self.c << self.d << self.e << self.f;
   }
-  friend BinaryEngram& operator>>(BinaryEngram& engram, Foo& self) {
+  friend engram::BinaryEngram& operator>>(engram::BinaryEngram& engram, Foo& self) {
     return engram >> self.a >> self.b >> self.c >> self.d >> self.e >> self.f;
   }
   friend std::ostream& operator<<(std::ostream& os, const Foo& self) {
@@ -56,7 +55,7 @@ struct Foo {
 };
 
 int main() {
-  BinaryEngram engram;
+  engram::BinaryEngram engram;
   // Serialize
   {
     Foo foo;
