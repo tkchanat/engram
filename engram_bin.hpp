@@ -146,7 +146,7 @@ namespace engram {
     template<typename Type>
     BinaryEngram& operator>>(std::optional<Type>& v) {
       bool has_value; *this >> has_value;
-      if (has_value())
+      if (has_value)
         *this >> *v;
       return *this;
     }
