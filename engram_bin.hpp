@@ -68,6 +68,12 @@ namespace engram {
       else if constexpr (std::is_pointer_v<Type>)         return serialize_ptr(v);
       else static_assert(dependent_false<Type>::value, "This type did not overload with operator<<.");
     }
+    BinaryEngram& serialize_bytes(const std::byte* ptr, const size_t size) {
+      *this << size;
+      if (size > 0)
+        buf.sputn(ptr, size);
+      return *this;
+    }
 
   private:
     template<typename Type>
@@ -136,6 +142,15 @@ namespace engram {
       else if constexpr (std::is_enum_v<Type>)            return deserialize_enum(v);
       else if constexpr (std::is_pointer_v<Type>)         return deserialize_ptr(v);
       else static_assert(dependent_false<Type>::value, "This type did not overload with operator>>.");
+    }
+    BinaryEngram& deserialize_bytes(std::byte*& ptr, size_t& size) {
+      *this >> size;
+      if (size > 0) {
+        if (ptr) delete[] ptr;
+        ptr = new std::byte[size];
+        buf.sgetn(ptr, size);
+      }
+      return *this;
     }
 
   private:

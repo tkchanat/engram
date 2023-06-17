@@ -37,13 +37,20 @@ struct Foo {
   std::vector<int> f;
   enum class Enum { None, A, B } g = Enum::None;
   std::unordered_map<std::string, int> h;
+  struct Bytes {
+    double* ptr = nullptr;
+    size_t size = 0;
+    friend engram::BinaryEngram& operator<<(engram::BinaryEngram& engram, const Bytes& self) { return engram.serialize_bytes((const std::byte*)self.ptr, self.size); }
+    friend engram::BinaryEngram& operator>>(engram::BinaryEngram& engram, Bytes& self) { return engram.deserialize_bytes((std::byte*&)self.ptr, self.size); }
+    friend std::ostream& operator<<(std::ostream& os, const Bytes& self) { return os << "Bytes(ptr=" << self.ptr << ", size=" << self.size << ")"; }
+  } bytes;
 
  public:
   friend engram::BinaryEngram& operator<<(engram::BinaryEngram& engram, const Foo& self) {
-    return engram << self.a << self.b << self.c << self.d << self.e << self.f << self.g << self.h;
+    return engram << self.a << self.b << self.c << self.d << self.e << self.f << self.g << self.h << self.bytes;
   }
   friend engram::BinaryEngram& operator>>(engram::BinaryEngram& engram, Foo& self) {
-    return engram >> self.a >> self.b >> self.c >> self.d >> self.e >> self.f >> self.g >> self.h;
+    return engram >> self.a >> self.b >> self.c >> self.d >> self.e >> self.f >> self.g >> self.h >> self.bytes;
   }
   friend std::ostream& operator<<(std::ostream& os, const Foo& self) {
     os << "Foo(a=" << self.a << ", b=" << self.b << ", c=" << self.c << ", d=" << self.d << ", e=";
@@ -55,7 +62,7 @@ struct Foo {
     os << "], g=" << (int)self.g << ", h={";
     for (const auto& i : self.h)
       os << '{' << i.first << ',' << i.second << "},";
-    return os << "})";
+    return os << "}, bytes=" << self.bytes << ")";
   }
 };
 
@@ -72,6 +79,7 @@ int main() {
     foo.f = { 7, 8, 9 };
     foo.g = Foo::Enum::A;
     foo.h["MagicNumber"] = 45510;
+    foo.bytes.ptr = new double[10], foo.bytes.size = 10;
     engram << foo;
   }
   // Deserialize
