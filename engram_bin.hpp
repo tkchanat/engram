@@ -1,6 +1,7 @@
 #pragma once
 #include <sstream>
 #include <array>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -58,6 +59,13 @@ namespace engram {
       *this << len;
       for (const auto& pair : v)
         *this << pair.first << pair.second;
+      return *this;
+    }
+    template<typename Type>
+    BinaryEngram& operator<<(const std::optional<Type>& v) {
+      *this << v.has_value();
+      if (v.has_value())
+        *this << v.value();
       return *this;
     }
     template<typename Type>
@@ -133,6 +141,13 @@ namespace engram {
         *this >> key;
         *this >> v[key];
       }
+      return *this;
+    }
+    template<typename Type>
+    BinaryEngram& operator>>(std::optional<Type>& v) {
+      bool has_value; *this >> has_value;
+      if (has_value())
+        *this >> *v;
       return *this;
     }
     template<typename Type>
