@@ -3,7 +3,7 @@ Getting tired of finding a suitable serialization library, ending this suffering
 
 **Engram** is:
 - ✔️ Header-only
-- ✔️ No complex macro black magic
+- ✔️ No complex macro/template black magic
 - ✔️ As lightweight as possible
 
 **Engram** is NOT:

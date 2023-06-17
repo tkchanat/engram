@@ -29,19 +29,21 @@ struct Derived : public Base {
 ENGRAM_REGISTER_TYPE(Derived, "Derived");
 
 struct Foo {
-  bool a = true;
-  int b = 123;
-  float c = 4.56f;
-  std::string d = "Hello Engram";
-  Base* e = new Derived;
-  std::vector<int> f = { 7, 8, 9 };
+  bool a = false;
+  int b = 0;
+  float c = 0.f;
+  std::string d;
+  Base* e = nullptr;
+  std::vector<int> f;
+  enum class Enum { None, A, B } g = Enum::None;
+  std::unordered_map<std::string, int> h;
 
  public:
   friend engram::BinaryEngram& operator<<(engram::BinaryEngram& engram, const Foo& self) {
-    return engram << self.a << self.b << self.c << self.d << self.e << self.f;
+    return engram << self.a << self.b << self.c << self.d << self.e << self.f << self.g << self.h;
   }
   friend engram::BinaryEngram& operator>>(engram::BinaryEngram& engram, Foo& self) {
-    return engram >> self.a >> self.b >> self.c >> self.d >> self.e >> self.f;
+    return engram >> self.a >> self.b >> self.c >> self.d >> self.e >> self.f >> self.g >> self.h;
   }
   friend std::ostream& operator<<(std::ostream& os, const Foo& self) {
     os << "Foo(a=" << self.a << ", b=" << self.b << ", c=" << self.c << ", d=" << self.d << ", e=";
@@ -50,7 +52,10 @@ struct Foo {
     os << ", f=[";
     for (const auto& i : self.f)
       os << i << ',';
-    return os << "])";
+    os << "], g=" << (int)self.g << ", h={";
+    for (const auto& i : self.h)
+      os << '{' << i.first << ',' << i.second << "},";
+    return os << "})";
   }
 };
 
@@ -59,6 +64,14 @@ int main() {
   // Serialize
   {
     Foo foo;
+    foo.a = true;
+    foo.b = 123;
+    foo.c = 4.56f;
+    foo.d = "Hello Engram";
+    foo.e = new Derived;
+    foo.f = { 7, 8, 9 };
+    foo.g = Foo::Enum::A;
+    foo.h["MagicNumber"] = 45510;
     engram << foo;
   }
   // Deserialize
