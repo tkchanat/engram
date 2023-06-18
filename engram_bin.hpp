@@ -5,6 +5,16 @@
 #include <unordered_map>
 #include <vector>
 
+#ifdef _WINDLL
+#define ENGRAM_EXTERN_REGISTRY
+/* Remember to put this definition somewhere in your dll.
+ * engram::EngramTypeRegistry& engram::registry_instance() {
+ *   static engram::EngramTypeRegistry registry;
+ *   return registry;
+ * }
+ */
+#endif
+
 namespace engram {
 
   typedef std::basic_stringbuf<std::byte> bytebuf;
@@ -199,10 +209,21 @@ namespace engram {
     bytebuf buf;
   };
 
+#ifdef ENGRAM_EXTERN_REGISTRY
+  extern struct EngramTypeRegistry& registry_instance();
+#endif
+
   struct EngramTypeRegistry {
     typedef void(*SerializeFn)(BinaryEngram&, const void*);
     typedef void(*DeserializeFn)(BinaryEngram&, void*&);
-    static EngramTypeRegistry& instance() { static EngramTypeRegistry registry; return registry; }
+    static EngramTypeRegistry& instance() {
+#ifdef ENGRAM_EXTERN_REGISTRY
+      return registry_instance();
+#else
+      static EngramTypeRegistry registry;
+      return registry;
+#endif
+    }
     std::unordered_map<std::string, SerializeFn> ser_map;
     std::unordered_map<std::string, DeserializeFn> de_map;
   };
@@ -216,6 +237,6 @@ namespace engram {
     static void serialize(engram::BinaryEngram& engram, const void* ptr) { engram << *static_cast<const Type*>(ptr); }\
     static void deserialize(engram::BinaryEngram& engram, void*& ptr) { ptr = new Type; engram >> *static_cast<Type*>(ptr); }\
   };\
-  RegisterType_##Type _register_type_##Type;
+  RegisterType_##Type __engram_register_type_##Type;
 
 }  // namespace engram

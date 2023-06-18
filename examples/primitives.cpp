@@ -2,6 +2,11 @@
 #include <iostream>
 #include <engram_bin.hpp>
 
+// engram::EngramTypeRegistry& engram::registry_instance() {
+//   static engram::EngramTypeRegistry registry;
+//   return registry;
+// }
+
 struct Base {
   std::string type = "base";
   virtual const char* type_id() const { return "Base"; }

@@ -49,5 +49,6 @@
     "list": "cpp",
     "unordered_map": "cpp",
     "xhash": "cpp"
-  }
+  },
+  "C_Cpp.dimInactiveRegions": true
 }
