@@ -3,6 +3,7 @@
 #include <array>
 #include <optional>
 #include <unordered_map>
+#include <fstream>
 #include <vector>
 
 #ifdef _WINDLL
@@ -17,8 +18,29 @@
 
 namespace engram {
 
+  typedef std::basic_string<std::byte> bytestr;
   typedef std::basic_stringbuf<std::byte> bytebuf;
   typedef std::basic_iostream<std::byte> bytestream;
+
+  class BinaryEngram;
+  struct EngramTypeRegistry;
+#ifdef ENGRAM_EXTERN_REGISTRY
+  extern struct EngramTypeRegistry& registry_instance();
+#endif
+  struct EngramTypeRegistry {
+    typedef void(*SerializeFn)(BinaryEngram&, const void*);
+    typedef void(*DeserializeFn)(BinaryEngram&, void*&);
+    static EngramTypeRegistry& instance() {
+#ifdef ENGRAM_EXTERN_REGISTRY
+      return registry_instance();
+#else
+      static EngramTypeRegistry registry;
+      return registry;
+#endif
+    }
+    std::unordered_map<std::string, SerializeFn> ser_map;
+    std::unordered_map<std::string, DeserializeFn> de_map;
+  };
 
   class BinaryEngram : bytestream {
     template <typename T> struct dependent_false { static constexpr bool value = false; };
@@ -34,6 +56,12 @@ namespace engram {
 
   public:
     BinaryEngram() : bytestream(&buf) {}
+    BinaryEngram(const std::string& data) : buf(reinterpret_cast<const bytestr&>(data)), bytestream(&buf) {}
+    friend std::ofstream& operator<<(std::ofstream& os, const BinaryEngram& engram) {
+      const bytestr str = engram.buf.str();
+      os.write(reinterpret_cast<const char*>(str.data()), str.size());
+      return os;
+    }
   
     // Serialization
     BinaryEngram& operator<<(const char* v) {
@@ -107,15 +135,17 @@ namespace engram {
     template<typename Type>
     BinaryEngram& serialize_ptr(const Type* v) {
       static_assert(has_type_id<Type>::value, "Base type must implement `const char* type_id() const` as virtual function");
-      if (!v) return *this << false; // nullptr bit
-      const std::string type_id = v->type_id();
-      *this << true << type_id;
-      const auto& polymorphic_map = EngramTypeRegistry::instance().ser_map;
-      auto it = polymorphic_map.find(type_id);
-      if (it == polymorphic_map.end())
-        abort(); // Polymorphic type not yet registered with ENGRAM_REGISTER_TYPE()
-      const void* ptr = static_cast<const void*>(v);
-      it->second(*this, ptr);
+      *this << bool(v != nullptr); // nullptr bit
+      if (v) {
+        const std::string type_id = v->type_id();
+        *this << type_id;
+        const auto& polymorphic_map = EngramTypeRegistry::instance().ser_map;
+        auto it = polymorphic_map.find(type_id);
+        if (it == polymorphic_map.end())
+          abort(); // Polymorphic type not yet registered with ENGRAM_REGISTER_TYPE()
+        const void* ptr = static_cast<const void*>(v);
+        it->second(*this, ptr);
+      }
       return *this;
     }
 
@@ -130,9 +160,17 @@ namespace engram {
     template<typename Type>
     BinaryEngram& operator>>(std::vector<Type>& v) {
       size_t len; *this >> len;
-      v.resize(len);
-      for (size_t i = 0; i < len; ++i)
-        *this >> v[i];
+      if (len) {
+        v.resize(len);
+        if constexpr (std::is_pod_v<Type>)
+          buf.sgetn(reinterpret_cast<std::byte*>(v.data()), len * sizeof(Type));
+        else {
+          for (size_t i = 0; i < len; ++i)
+            *this >> v[i];
+        }
+      }
+      else
+        v.clear();
       return *this;
     }
     template<typename Type, size_t N>
@@ -157,7 +195,7 @@ namespace engram {
     BinaryEngram& operator>>(std::optional<Type>& v) {
       bool has_value; *this >> has_value;
       if (has_value)
-        *this >> *v;
+        *this >> v.emplace();
       return *this;
     }
     template<typename Type>
@@ -192,40 +230,22 @@ namespace engram {
     template<typename Type>
     BinaryEngram& deserialize_ptr(Type*& v) {
       static_assert(has_type_id<Type>::value, "Base type must implement `const char* type_id() const` as virtual function");
-      bool not_null; *this >> not_null;
-      if (!not_null) return *this;
-      std::string type_id; *this >> type_id;
-      const auto& polymorphic_map = EngramTypeRegistry::instance().de_map;
-      auto it = polymorphic_map.find(type_id);
-      if (it == polymorphic_map.end())
-        abort(); // Polymorphic type not yet registered with ENGRAM_REGISTER_TYPE()
-      void* ptr = nullptr;
-      it->second(*this, ptr);
-      v = static_cast<Type*>(ptr);
+      bool has_value; *this >> has_value;
+      if (has_value) {
+        std::string type_id; *this >> type_id;
+        const auto& polymorphic_map = EngramTypeRegistry::instance().de_map;
+        auto it = polymorphic_map.find(type_id);
+        if (it == polymorphic_map.end())
+          abort(); // Polymorphic type not yet registered with ENGRAM_REGISTER_TYPE()
+        void* ptr = nullptr;
+        it->second(*this, ptr);
+        v = static_cast<Type*>(ptr);
+      }
       return *this;
     }
 
   private:
     bytebuf buf;
-  };
-
-#ifdef ENGRAM_EXTERN_REGISTRY
-  extern struct EngramTypeRegistry& registry_instance();
-#endif
-
-  struct EngramTypeRegistry {
-    typedef void(*SerializeFn)(BinaryEngram&, const void*);
-    typedef void(*DeserializeFn)(BinaryEngram&, void*&);
-    static EngramTypeRegistry& instance() {
-#ifdef ENGRAM_EXTERN_REGISTRY
-      return registry_instance();
-#else
-      static EngramTypeRegistry registry;
-      return registry;
-#endif
-    }
-    std::unordered_map<std::string, SerializeFn> ser_map;
-    std::unordered_map<std::string, DeserializeFn> de_map;
   };
 
   #define ENGRAM_REGISTER_TYPE(Type, ID) \
