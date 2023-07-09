@@ -85,13 +85,13 @@ namespace engram {
       size_t len = 0;
       while (v[len] != '\0') ++len;
       *this << len;
-      write(reinterpret_cast<const std::byte*>(v), len * sizeof(char));
+      buf.sputn(reinterpret_cast<const std::byte*>(v), len * sizeof(char));
       return *this;
     }
     BinaryEngram& operator<<(const std::string& v) {
       const size_t len = v.length();
       *this << len;
-      write(reinterpret_cast<const std::byte*>(&v[0]), len * sizeof(std::string::value_type));
+      buf.sputn(reinterpret_cast<const std::byte*>(&v[0]), len * sizeof(std::string::value_type));
       return *this;
     }
     template<typename Type>
@@ -134,19 +134,19 @@ namespace engram {
     BinaryEngram& serialize_bytes(const std::byte* ptr, const size_t size) {
       *this << size;
       if (size > 0)
-        write(ptr, size);
+        buf.sputn(ptr, size);
       return *this;
     }
 
   private:
     template<typename Type>
     BinaryEngram& serialize_prims(const Type& v) {
-      write(reinterpret_cast<const std::byte*>(&v), sizeof(Type));
+      buf.sputn(reinterpret_cast<const std::byte*>(&v), sizeof(Type));
       return *this;
     }
     template<typename Type>
     BinaryEngram& serialize_enum(const Type v) {
-      write(reinterpret_cast<const std::byte*>(&v), sizeof(std::underlying_type_t<Type>));
+      buf.sputn(reinterpret_cast<const std::byte*>(&v), sizeof(std::underlying_type_t<Type>));
       return *this;
     }
     template<typename Type>
@@ -171,7 +171,7 @@ namespace engram {
     BinaryEngram& operator>>(std::string& v) {
       size_t len; *this >> len;
       v.resize(len);
-      read(reinterpret_cast<std::byte*>(&v[0]), len * sizeof(std::string::value_type));
+      buf.sgetn(reinterpret_cast<std::byte*>(&v[0]), len * sizeof(std::string::value_type));
       return *this;
     }
     template<typename Type>
@@ -180,7 +180,7 @@ namespace engram {
       if (len) {
         v.resize(len);
         if constexpr (std::is_trivially_copyable_v<Type>)
-          read(reinterpret_cast<std::byte*>(v.data()), len * sizeof(Type));
+          buf.sgetn(reinterpret_cast<std::byte*>(v.data()), len * sizeof(Type));
         else {
           for (size_t i = 0; i < len; ++i)
             *this >> v[i];
@@ -228,7 +228,7 @@ namespace engram {
       if (size > 0) {
         if (ptr) delete[] ptr;
         ptr = new std::byte[size];
-        read(ptr, size);
+        buf.sgetn(ptr, size);
       }
       return *this;
     }
@@ -236,12 +236,12 @@ namespace engram {
   private:
     template<typename Type>
     BinaryEngram& deserialize_prims(Type& v) {
-      read(reinterpret_cast<std::byte*>(&v), sizeof(Type));
+      buf.sgetn(reinterpret_cast<std::byte*>(&v), sizeof(Type));
       return *this;
     }
     template<typename Type>
     BinaryEngram& deserialize_enum(Type& v) {
-      read(reinterpret_cast<std::byte*>(&v), sizeof(std::underlying_type_t<Type>));
+      buf.sgetn(reinterpret_cast<std::byte*>(&v), sizeof(std::underlying_type_t<Type>));
       return *this;
     }
     template<typename Type>
