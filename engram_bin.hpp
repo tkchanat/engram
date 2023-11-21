@@ -3,6 +3,7 @@
 #include <iostream>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <optional>
 #include <sstream>
 #include <unordered_map>
@@ -23,6 +24,7 @@ namespace engram {
   typedef std::basic_string<std::byte> bytestr;
   typedef std::basic_stringbuf<std::byte> bytebuf;
   typedef std::basic_iostream<std::byte> bytestream;
+  typedef uint32_t type_id;
 
   class BinaryEngram;
   struct EngramTypeRegistry;
@@ -40,8 +42,8 @@ namespace engram {
       return registry;
 #endif
     }
-    std::unordered_map<std::string, SerializeFn> ser_map;
-    std::unordered_map<std::string, DeserializeFn> de_map;
+    std::unordered_map<type_id, SerializeFn> ser_map;
+    std::unordered_map<type_id, DeserializeFn> de_map;
   };
 
   class BinaryEngram : bytestream {
@@ -154,10 +156,10 @@ namespace engram {
       static_assert(has_type_id<Type>::value, "Base type must implement `const char* type_id() const` as virtual function");
       *this << bool(v != nullptr); // nullptr bit
       if (v) {
-        const std::string type_id = v->type_id();
-        *this << type_id;
+        const type_id id = (type_id)v->type_id();
+        *this << id;
         const auto& polymorphic_map = EngramTypeRegistry::instance().ser_map;
-        auto it = polymorphic_map.find(type_id);
+        auto it = polymorphic_map.find(id);
         if (it == polymorphic_map.end())
           abort(); // Polymorphic type not yet registered with ENGRAM_REGISTER_TYPE()
         const void* ptr = static_cast<const void*>(v);
@@ -249,9 +251,9 @@ namespace engram {
       static_assert(has_type_id<Type>::value, "Base type must implement `const char* type_id() const` as virtual function");
       bool has_value; *this >> has_value;
       if (has_value) {
-        std::string type_id; *this >> type_id;
+        type_id id; *this >> id;
         const auto& polymorphic_map = EngramTypeRegistry::instance().de_map;
-        auto it = polymorphic_map.find(type_id);
+        auto it = polymorphic_map.find(id);
         if (it == polymorphic_map.end())
           abort(); // Polymorphic type not yet registered with ENGRAM_REGISTER_TYPE()
         void* ptr = nullptr;
@@ -265,15 +267,10 @@ namespace engram {
     bytebuf buf;
   };
 
-  #define ENGRAM_REGISTER_TYPE(Type, ID) \
-  struct RegisterType_##Type {\
-    RegisterType_##Type() {\
-      engram::EngramTypeRegistry::instance().ser_map.insert({ ID, &serialize });\
-      engram::EngramTypeRegistry::instance().de_map.insert({ ID, &deserialize });\
-    }\
-    static void serialize(engram::BinaryEngram& engram, const void* ptr) { engram << *static_cast<const Type*>(ptr); }\
-    static void deserialize(engram::BinaryEngram& engram, void*& ptr) { ptr = new Type; engram >> *static_cast<Type*>(ptr); }\
-  };\
-  RegisterType_##Type __engram_register_type_##Type;
+  #define ENGRAM_CONCAT_IMPL(a, b) a ## b
+  #define ENGRAM_CONCAT(a, b) ENGRAM_CONCAT_IMPL(a, b)
+  #define ENGRAM_REGISTER_TYPE(Type, ID, ...) \
+    bool ENGRAM_CONCAT(Type##ser_entry, __COUNTER__) = [] { engram::EngramTypeRegistry::instance().ser_map.insert({ (engram::type_id)ID, [](engram::BinaryEngram& engram, const void* ptr) { engram << *static_cast<const Type*>(ptr); } }); return true; }();\
+    bool ENGRAM_CONCAT(Type##de_entry, __COUNTER__) = [] { engram::EngramTypeRegistry::instance().de_map.insert({ (engram::type_id)ID, [](engram::BinaryEngram& engram, void*& ptr, std::tuple<__VA_ARGS__>&& args) { ptr = new Type; engram >> *static_cast<Type*>(ptr); } }); return true; }();\
 
 }  // namespace engram
