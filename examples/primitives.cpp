@@ -1,97 +1,82 @@
-#include <stdio.h>
-#include <iostream>
 #include <engram_bin.hpp>
+#include <assert.h>
+#include <iostream>
 
-// engram::EngramTypeRegistry& engram::registry_instance() {
-//   static engram::EngramTypeRegistry registry;
-//   return registry;
-// }
-
-struct Base {
-  std::string type = "base";
-  virtual const char* type_id() const { return "Base"; }
-  virtual std::ostream& print(std::ostream& os) const { return os << "Base(type=" << type << ")"; }
-  friend engram::BinaryEngram& operator<<(engram::BinaryEngram& engram, const Base& self) { return engram << self.type; }
-  friend engram::BinaryEngram& operator>>(engram::BinaryEngram& engram, Base& self) { return engram >> self.type; }
-  friend std::ostream& operator<<(std::ostream& os, const Base& self) { return self.print(os); }
-};
-ENGRAM_REGISTER_TYPE(Base, "Base");
-
-struct Derived : public Base {
-  Derived() { type = "derived"; }
-  std::array<char, 6> payload = { 's', 'e', 'c', 'r', 'e', 't' };
-  const char* type_id() const override { return "Derived"; }
-  std::ostream& print(std::ostream& os) const override {
-    os << "Derived(type=" << type << ", payload=";
-    for (char c : payload)
-      os << c;
-    return os << ")";
+struct Integers {
+  uint8_t u8;
+  uint16_t u16;
+  uint32_t u32;
+  uint64_t u64;
+  template<typename Engram>
+  void serialize(Engram& engram, uint32_t version) const {
+    engram << u8 << u16 << u32 << u64;
   }
-  friend engram::BinaryEngram& operator<<(engram::BinaryEngram& engram, const Derived& self) { return engram << (const Base&)self << self.payload; }
-  friend engram::BinaryEngram& operator>>(engram::BinaryEngram& engram, Derived& self) { return engram >> (Base&)self >> self.payload; }
-  friend std::ostream& operator<<(std::ostream& os, const Derived& self) { return self.print(os); }
-};
-ENGRAM_REGISTER_TYPE(Derived, "Derived");
-
-struct Foo {
-  bool a = false;
-  int b = 0;
-  float c = 0.f;
-  std::string d;
-  Base* e = nullptr;
-  std::vector<int> f;
-  enum class Enum { None, A, B } g = Enum::None;
-  std::unordered_map<std::string, int> h;
-  struct Bytes {
-    double* ptr = nullptr;
-    size_t size = 0;
-    friend engram::BinaryEngram& operator<<(engram::BinaryEngram& engram, const Bytes& self) { return engram.serialize_bytes((const std::byte*)self.ptr, self.size); }
-    friend engram::BinaryEngram& operator>>(engram::BinaryEngram& engram, Bytes& self) { return engram.deserialize_bytes((std::byte*&)self.ptr, self.size); }
-    friend std::ostream& operator<<(std::ostream& os, const Bytes& self) { return os << "Bytes(ptr=" << self.ptr << ", size=" << self.size << ")"; }
-  } bytes;
-
- public:
-  friend engram::BinaryEngram& operator<<(engram::BinaryEngram& engram, const Foo& self) {
-    return engram << self.a << self.b << self.c << self.d << self.e << self.f << self.g << self.h << self.bytes;
+  template<typename Engram>
+  void deserialize(Engram& engram, uint32_t version) {
+    engram >> u8 >> u16 >> u32 >> u64;
   }
-  friend engram::BinaryEngram& operator>>(engram::BinaryEngram& engram, Foo& self) {
-    return engram >> self.a >> self.b >> self.c >> self.d >> self.e >> self.f >> self.g >> self.h >> self.bytes;
-  }
-  friend std::ostream& operator<<(std::ostream& os, const Foo& self) {
-    os << "Foo(a=" << self.a << ", b=" << self.b << ", c=" << self.c << ", d=" << self.d << ", e=";
-    if (self.e) os << *self.e;
-    else os << "(null)";
-    os << ", f=[";
-    for (const auto& i : self.f)
-      os << i << ',';
-    os << "], g=" << (int)self.g << ", h={";
-    for (const auto& i : self.h)
-      os << '{' << i.first << ',' << i.second << "},";
-    return os << "}, bytes=" << self.bytes << ")";
+  bool operator==(const Integers& other) const {
+    if (u8  != other.u8)  { printf("uint8_t roundtrip failed\n");  return false; }
+    if (u16 != other.u16) { printf("uint16_t roundtrip failed\n"); return false; }
+    if (u32 != other.u32) { printf("uint32_t roundtrip failed\n"); return false; }
+    if (u64 != other.u64) { printf("uint64_t roundtrip failed\n"); return false; }
+    return true;
   }
 };
+
+struct FloatingPoint {
+  float f32;
+  double f64;
+  template<typename Engram>
+  void serialize(Engram& engram, uint32_t version) const {
+    engram << f32 << f64;
+  }
+  template<typename Engram>
+  void deserialize(Engram& engram, uint32_t version) {
+    engram >> f32 >> f64;
+  }
+  bool operator==(const FloatingPoint& other) const {
+    if (f32 != other.f32) { printf("float roundtrip failed\n"); return false; }
+    if (f64 != other.f64) { printf("double roundtrip failed\n"); return false; }
+    return true;
+  }
+};
+
+template<typename T>
+bool roundtrip(const T& obj) {
+  // Serialize
+  engram::OBinaryEngram serializer;
+  serializer << obj;
+  std::cout << serializer << std::endl;
+
+  // Deserialize
+  T deserialized_obj;
+  engram::IBinaryEngram deserializer;
+  deserializer.rdbuf(serializer.rdbuf());
+  deserializer.seekg(0);
+  std::cout << deserializer << std::endl;
+  deserializer >> deserialized_obj;
+  return obj == deserialized_obj;
+}
 
 int main() {
-  engram::BinaryEngram engram;
-  // Serialize
-  {
-    Foo foo;
-    foo.a = true;
-    foo.b = 123;
-    foo.c = 4.56f;
-    foo.d = "Hello Engram";
-    foo.e = new Derived;
-    foo.f = { 7, 8, 9 };
-    foo.g = Foo::Enum::A;
-    foo.h["MagicNumber"] = 45510;
-    foo.bytes.ptr = new double[10], foo.bytes.size = 10;
-    engram << foo;
-  }
-  // Deserialize
-  {
-    Foo foo;
-    engram >> foo;
-    std::cout << foo << std::endl;
-  }
+  // Boolean
+  bool boolean = true;
+  assert(roundtrip(boolean));
+
+  // Integers
+  Integers integers = { 1, 2, 4, 8 };
+  assert(roundtrip(integers));
+
+  // Floating-point
+  FloatingPoint floating_points = { 123.f, 4.56 };
+  assert(roundtrip(floating_points));
+
+  // Enumerators
+  enum class Enumerators { None, A, B };
+  Enumerators enumerators = Enumerators::A;
+  assert(roundtrip(enumerators));
+
+  printf("Tests Completed\n");
   return 0;
 }
