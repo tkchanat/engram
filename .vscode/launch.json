@@ -19,11 +19,8 @@
       "name": "Launch (MacOS)",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/build/examples/primitives",
+      "program": "${workspaceFolder}/build/examples/stl_types",
       "cwd": "${fileDirname}",
-      "env": {
-        "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS": "2",
-      },
     }
   ]
 }

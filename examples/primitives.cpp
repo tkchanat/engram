@@ -1,4 +1,4 @@
-#include <engram_bin.hpp>
+#include <engram.hpp>
 #include <assert.h>
 #include <iostream>
 
@@ -45,7 +45,7 @@ struct FloatingPoint {
 template<typename T>
 bool roundtrip(const T& obj) {
   // Serialize
-  engram::BinaryEngram engram;
+  engram::Engram engram;
   engram << obj;
   std::cout << engram << std::endl;
 
