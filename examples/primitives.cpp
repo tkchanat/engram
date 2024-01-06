@@ -45,18 +45,14 @@ struct FloatingPoint {
 template<typename T>
 bool roundtrip(const T& obj) {
   // Serialize
-  engram::OBinaryEngram serializer;
-  serializer << obj;
-  std::cout << serializer << std::endl;
+  engram::BinaryEngram engram;
+  engram << obj;
+  std::cout << engram << std::endl;
 
   // Deserialize
   T deserialized_obj;
-  engram::IBinaryEngram deserializer;
-  deserializer.rdbuf(serializer.rdbuf());
-  deserializer.seekg(0);
-  std::cout << deserializer << std::endl;
-  deserializer >> deserialized_obj;
-  return obj == deserialized_obj;
+  engram >> deserialized_obj;
+  return deserialized_obj == obj;
 }
 
 int main() {

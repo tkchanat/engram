@@ -5,7 +5,7 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "(Windows) Launch",
+      "name": "Launch (Windows)",
       "type": "cppvsdbg",
       "request": "launch",
       "program": "${workspaceFolder}/build/examples/primitives.exe",
@@ -14,7 +14,16 @@
       "cwd": "${fileDirname}",
       "environment": [],
       "console": "integratedTerminal"
+    },
+    {
+      "name": "Launch (MacOS)",
+      "type": "lldb",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/examples/primitives",
+      "cwd": "${fileDirname}",
+      "env": {
+        "MVK_CONFIG_USE_METAL_ARGUMENT_BUFFERS": "2",
+      },
     }
-
   ]
 }

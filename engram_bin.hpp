@@ -1,46 +1,37 @@
 #pragma once
+#include <sstream>
 #include <array>
-#include <istream>
 #include <functional>
 #include <optional>
-#include <sstream>
 #include <unordered_map>
 #include <vector>
-#include <streambuf>
-#include <iomanip>
 
 namespace engram {
 
-  typedef std::basic_string<std::byte> bytestr;
-  typedef std::basic_stringbuf<std::byte> bytebuf;
-  typedef std::basic_istream<std::byte> ibytestream;
-  typedef std::basic_ostream<std::byte> obytestream;
-  typedef uint32_t type_id;
-
   template <typename T> struct dependent_false { static constexpr bool value = false; };
 
-  class OBinaryEngram : public obytestream {
+  class OBinaryEngram : public std::ostream {
     // SFINAE test
     template <typename T>
     struct has_serialize {
       template<typename C> static std::true_type test(decltype(&C::template serialize<OBinaryEngram&, uint32_t>));
-      template<typename C> static std::false_type test(...);    
+      template<typename C> static std::false_type test(...);
       static constexpr bool value = sizeof(test<T>(nullptr)) == sizeof(std::true_type);
     };
 
   public:
-    OBinaryEngram() : obytestream(&buf) {}
+    OBinaryEngram(std::stringbuf* buf) : std::ostream(buf) {}
     OBinaryEngram& operator<<(const char* v) {
       size_t len = 0;
       while (v[len] != '\0') ++len;
       *this << len;
-      buf.sputn(reinterpret_cast<const std::byte*>(v), len * sizeof(char));
+      write(reinterpret_cast<const char*>(v), len * sizeof(char));
       return *this;
     }
     OBinaryEngram& operator<<(const std::string& v) {
       const size_t len = v.length();
       *this << len;
-      buf.sputn(reinterpret_cast<const std::byte*>(&v[0]), len * sizeof(std::string::value_type));
+      write(reinterpret_cast<const char*>(&v[0]), len * sizeof(std::string::value_type));
       return *this;
     }
     template<typename Type>
@@ -83,52 +74,43 @@ namespace engram {
     OBinaryEngram& serialize_bytes(const std::byte* ptr, const size_t size) {
       *this << size;
       if (size > 0)
-        buf.sputn(ptr, size);
+        write(reinterpret_cast<const char*>(ptr), size);
       return *this;
-    }
-    friend inline std::ostream& operator<<(std::ostream& os, const OBinaryEngram& engram){
-      constexpr char hexmap[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
-      const bytestr bytes = engram.buf.str();
-      os << std::hex;
-      for (size_t i = 0, nbytes = bytes.size(); i < nbytes; i++)
-        os << hexmap[char(bytes[i] >> 4)] << hexmap[(char)bytes[i] & 0x0F] << ' ';
-      return os << std::dec;
     }
 
   private:
     template<typename Type>
     OBinaryEngram& serialize_prim(const Type& v) {
-      buf.sputn(reinterpret_cast<const std::byte*>(&v), sizeof(Type));
+      write(reinterpret_cast<const char*>(&v), sizeof(Type));
       return *this;
     }
     template<typename Type>
     OBinaryEngram& serialize_enum(const Type v) {
-      buf.sputn(reinterpret_cast<const std::byte*>(&v), sizeof(std::underlying_type_t<Type>));
+      write(reinterpret_cast<const char*>(&v), sizeof(std::underlying_type_t<Type>));
       return *this;
     }
 
   private:
     uint32_t version = 0;
-    bytebuf buf;
   };
 
-  class IBinaryEngram : public ibytestream {
+  class IBinaryEngram : public std::istream {
     // SFINAE test
     template <typename T>
     struct has_deserialize {
       template<typename C> static std::true_type test(decltype(&C::template deserialize<IBinaryEngram&, uint32_t>));
-      template<typename C> static std::false_type test(...);    
+      template<typename C> static std::false_type test(...);
       static constexpr bool value = sizeof(test<T>(nullptr)) == sizeof(std::true_type);
     };
 
   public:
-    IBinaryEngram() : ibytestream(&buf) {}
+    IBinaryEngram(std::stringbuf* buf) : std::istream(buf) {}
 
     // Deserialization
     IBinaryEngram& operator>>(std::string& v) {
       size_t len; *this >> len;
       v.resize(len);
-      buf.sgetn(reinterpret_cast<std::byte*>(&v[0]), len * sizeof(std::string::value_type));
+      read(reinterpret_cast<char*>(&v[0]), len * sizeof(std::string::value_type));
       return *this;
     }
     template<typename Type>
@@ -137,7 +119,7 @@ namespace engram {
       if (len) {
         v.resize(len);
         if constexpr (std::is_trivially_copyable_v<Type>)
-          buf.sgetn(reinterpret_cast<std::byte*>(v.data()), len * sizeof(Type));
+          read(reinterpret_cast<char*>(v.data()), len * sizeof(Type));
         else {
           for (size_t i = 0; i < len; ++i)
             *this >> v[i];
@@ -185,14 +167,41 @@ namespace engram {
       if (size > 0) {
         if (ptr) delete[] ptr;
         ptr = new std::byte[size];
-        buf.sgetn(ptr, size);
+        read(reinterpret_cast<char*&>(ptr), size);
       }
       return *this;
     }
 
-    friend inline std::ostream& operator<<(std::ostream& os, const IBinaryEngram& engram){
+  private:
+    template<typename Type>
+    IBinaryEngram& deserialize_prim(Type& v) {
+      read(reinterpret_cast<char*>(&v), sizeof(Type));
+      return *this;
+    }
+    template<typename Type>
+    IBinaryEngram& deserialize_enum(Type& v) {
+      read(reinterpret_cast<char*>(&v), sizeof(std::underlying_type_t<Type>));
+      return *this;
+    }
+
+  protected:
+    uint32_t version = 0;
+  };
+
+  class BinaryEngram : public IBinaryEngram, public OBinaryEngram {
+    static constexpr auto openmode = std::ios::in | std::ios::out | std::ios::binary;
+
+  public:
+    BinaryEngram() : str_buf(openmode), IBinaryEngram(&str_buf), OBinaryEngram(&str_buf) {}
+    std::vector<std::byte> bytes() const {
+      const std::string str = str_buf.str();
+      std::vector<std::byte> result(str.size());
+      std::transform(str.begin(), str.end(), result.begin(), [](char c) { return std::byte(c); });
+      return result;
+    }
+    friend inline std::ostream& operator<<(std::ostream& os, BinaryEngram& engram){
       constexpr char hexmap[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
-      const bytestr bytes = engram.buf.str();
+      const std::vector<std::byte> bytes = engram.bytes();
       os << std::hex;
       for (size_t i = 0, nbytes = bytes.size(); i < nbytes; i++)
         os << hexmap[char(bytes[i] >> 4)] << hexmap[(char)bytes[i] & 0x0F] << ' ';
@@ -200,20 +209,7 @@ namespace engram {
     }
 
   private:
-    template<typename Type>
-    IBinaryEngram& deserialize_prim(Type& v) {
-      buf.sgetn(reinterpret_cast<std::byte*>(&v), sizeof(Type));
-      return *this;
-    }
-    template<typename Type>
-    IBinaryEngram& deserialize_enum(Type& v) {
-      buf.sgetn(reinterpret_cast<std::byte*>(&v), sizeof(std::underlying_type_t<Type>));
-      return *this;
-    }
-
-  private:
-    uint32_t version = 0;
-    bytebuf buf;
+    std::stringbuf str_buf;
   };
 
 }  // namespace engram
