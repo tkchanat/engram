@@ -1,5 +1,6 @@
 #pragma once
 #include <sstream>
+#include <fstream>
 #include <vector>
 
 #ifdef ENGRAM_DEFINE_STD
@@ -30,7 +31,7 @@ namespace engram {
     };
 
   public:
-    OEngram(std::stringbuf* buf) : std::ostream(buf) {}
+    OEngram(std::streambuf* buf) : std::ostream(buf) {}
     OEngram& operator<<(const char* v) {
       size_t len = 0;
       while (v[len] != '\0') ++len;
@@ -134,7 +135,7 @@ namespace engram {
     };
 
   public:
-    IEngram(std::stringbuf* buf) : std::istream(buf) {}
+    IEngram(std::streambuf* buf) : std::istream(buf) {}
 
     // Deserialization
 #ifdef ENGRAM_DEFINE_STD_STRINGS
@@ -260,6 +261,32 @@ namespace engram {
 
   private:
     std::stringbuf str_buf;
+  };
+
+  class OEngramFile : public OEngram {
+  public:
+    OEngramFile() : OEngram(&file_buf) {}
+    OEngramFile(const char* file_name) : OEngram(&file_buf) {
+      file_buf.open(file_name, std::ios::out | std::ios::binary | std::ios::trunc);
+    }
+    ~OEngramFile() { file_buf.close(); }
+    bool is_open() const { return file_buf.is_open(); }
+
+  private:
+    std::filebuf file_buf;
+  };
+
+  class IEngramFile : public IEngram {
+  public:
+    IEngramFile() : IEngram(&file_buf) {}
+    IEngramFile(const char* file_name) : IEngram(&file_buf) {
+      file_buf.open(file_name, std::ios::in | std::ios::binary | std::ios::beg);
+    }
+    ~IEngramFile() { file_buf.close(); }
+    bool is_open() const { return file_buf.is_open(); }
+
+  private:
+    std::filebuf file_buf;
   };
 
 }  // namespace engram

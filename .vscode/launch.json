@@ -19,7 +19,7 @@
       "name": "Launch (MacOS)",
       "type": "lldb",
       "request": "launch",
-      "program": "${workspaceFolder}/build/examples/stl_types",
+      "program": "${workspaceFolder}/build/examples/file_io",
       "cwd": "${fileDirname}",
     }
   ]
